@@ -78,40 +78,40 @@ C.....MULTIGRID INFORMATION...................
 c*********************************************
 c	input the permeability data
 c*********************************************
-c	if (mx*kx .eq. 2048) then
-c                nxstart=-511
-c                nystart=-511
-c        else if (mx*kx .eq. 1024) then	
-c		nxstart=-255
-c		nystart=-255
-c	else if (mx*kx .eq. 512 ) then
-c		 nxstart=-127
-c                 nystart=-127
-c        else if (mx*kx .eq. 256 ) then
-c                 nxstart=-63
-c                 nystart=-63
-c        else if (mx*kx .eq. 64) then
-c                 nxstart=-31
-c                 nystart=-31
-c	else 
-c		print*, 'permeability data error'
-c		stop
-c	endif
-c
-c	open(1,file='../dat/perms.dat')
-c	    read(1,*) nx1,ny1,ntot1
-cc
-cc.	data check
-cc	
-c	    n1=2*(nxstart-1)
-c	    if (mx*kx .ne. (nx1+n1)) then
-c		print*, 'gird not consistent'
-c		stop
-c	    endif
-c	    do i=nxstart,nx1+nxstart-1
-c        	read(1,*) (perm(i,j),j=nystart,ny1+nystart-1)
-c	    enddo
-c	close(1)
+      if (mx*kx .eq. 2048) then
+            nxstart=-511
+            nystart=-511
+      else if (mx*kx .eq. 1024) then	
+            nxstart=-255
+            nystart=-255
+      else if (mx*kx .eq. 512 ) then
+            nxstart=-127
+            nystart=-127
+      else if (mx*kx .eq. 256 ) then
+            nxstart=-63
+            nystart=-63
+      else if (mx*kx .eq. 64) then
+            nxstart=-31
+            nystart=-31
+	  else 
+            print*, 'permeability data error'
+            stop
+      endif
+
+      open(1,file='../dat/perms.dat')
+	  read(1,*) nx1,ny1,ntot1
+
+       !data check
+	
+      n1=2*(nxstart-1)
+	  if (mx*kx .ne. (nx1+n1)) then
+		print*, 'gird not consistent'
+		stop
+	    endif
+	    do i=nxstart,nx1+nxstart-1
+       	read(1,*) (perm(i,j),j=nystart,ny1+nystart-1)
+	    enddo
+	  close(1)
 
        open(1,file='base/base1',status='unknown')
 C***********************************************************
@@ -124,13 +124,6 @@ C***********************************************************
 c      nx0=(mi-1)*kx-2*kx+1          
 c      ny0=(mj-1)*ky-2*ky+1             
 c      print*, 'mi,mj,nx0,ny0,x0,y0=',mi,mj,nx0,ny0,x0,y0
-
-c     do i=nx0,nx0+nx-1
-c        do j=ny0,ny0+ny-1
-c           perm(i,j)=(coef((i-1)*hx,(j-1)*hy)+coef((i-1)*hx,j*hy)
-c    +                +coef(i*hx,(j-1)*hy)+coef(i*hx,j*hy))/4.0d0
-c        end do
-c     end do
 
 C.....FORM THE MA MATRIX.....................
 
