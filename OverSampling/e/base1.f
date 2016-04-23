@@ -78,40 +78,43 @@ C.....MULTIGRID INFORMATION...................
 c*********************************************
 c	input the permeability data
 c*********************************************
-      if (mx*kx .eq. 2048) then
-            nxstart=-511
-            nystart=-511
-      else if (mx*kx .eq. 1024) then	
-            nxstart=-255
-            nystart=-255
-      else if (mx*kx .eq. 512 ) then
-            nxstart=-127
-            nystart=-127
-      else if (mx*kx .eq. 256 ) then
-            nxstart=-63
-            nystart=-63
-      else if (mx*kx .eq. 64) then
-            nxstart=-31
-            nystart=-31
-	  else 
-            print*, 'permeability data error'
-            stop
-      endif
+	if (mx*kx .eq. 2048) then
+                nxstart=-511
+                nystart=-511
+        else if (mx*kx .eq. 1024) then	
+		nxstart=-255
+		nystart=-255
+	else if (mx*kx .eq. 512 ) then
+		 nxstart=-127
+                 nystart=-127
+        else if (mx*kx .eq. 256 ) then
+                 nxstart=-63
+                 nystart=-63
+        else if (mx*kx .eq. 128) then
+                 nxstart=-31
+                 nystart=-31
+        else if (mx*kx .eq. 64) then
+                 nxstart=-15
+                 nystart=-15
+	else 
+		print*, 'permeability data error'
+		stop
+	endif
 
-      open(1,file='../dat/perms.dat')
-	  read(1,*) nx1,ny1,ntot1
-
-       !data check
-	
-      n1=2*(nxstart-1)
-	  if (mx*kx .ne. (nx1+n1)) then
+	open(1,file='../dat/perms.dat')
+	    read(1,*) nx1,ny1,ntot1
+c
+c.	data check
+c	
+	    n1=2*(nxstart-1)
+	    if (mx*kx .ne. (nx1+n1)) then
 		print*, 'gird not consistent'
 		stop
 	    endif
 	    do i=nxstart,nx1+nxstart-1
-       	read(1,*) (perm(i,j),j=nystart,ny1+nystart-1)
+        	read(1,*) (perm(i,j),j=nystart,ny1+nystart-1)
 	    enddo
-	  close(1)
+	close(1)
 
        open(1,file='base/base1',status='unknown')
 C***********************************************************
@@ -124,6 +127,13 @@ C***********************************************************
 c      nx0=(mi-1)*kx-2*kx+1          
 c      ny0=(mj-1)*ky-2*ky+1             
 c      print*, 'mi,mj,nx0,ny0,x0,y0=',mi,mj,nx0,ny0,x0,y0
+
+c     do i=nx0,nx0+nx-1
+c        do j=ny0,ny0+ny-1
+c           perm(i,j)=(coef((i-1)*hx,(j-1)*hy)+coef((i-1)*hx,j*hy)
+c    +                +coef(i*hx,(j-1)*hy)+coef(i*hx,j*hy))/4.0d0
+c        end do
+c     end do
 
 C.....FORM THE MA MATRIX.....................
 
@@ -387,8 +397,6 @@ C     -----------------------------------------------
             do node=1,4
                x=coor_gauss(node,1,i,j)
                y=coor_gauss(node,2,i,j)
-               !x=coor(node,1,i,j)
-               !y=coor(node,2,i,j)
                bk1=basis_x(k,x,y,i,j)
                bk2=basis_y(k,x,y,i,j)
                bl1=basis_x(l,x,y,i,j)
@@ -601,12 +609,8 @@ C     -------------------------------------------
 C     COEFFICIENT MATRIX
 C     -------------------------------------------
       real*8 function d(i,j,x,y)
-      real*8 x,y,coef,perm(-511:2560,-511:2560)
-      real*8 tmpx,tmpy
-      integer i,j,k,l
-      common /param/ nx,ny,hx,hy
-      
-      
+      real*8 x,y,coef
+      integer i,j
       if     (i.eq.1.and.j.eq.1) then
         d=coef(x,y)
       elseif (i.eq.1.and.j.eq.2) then
@@ -618,7 +622,5 @@ C     -------------------------------------------
       else
         print*, 'problem here in function d!'
       endif
-      
-      
       return
       end

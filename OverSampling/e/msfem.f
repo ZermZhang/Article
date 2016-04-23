@@ -1,9 +1,8 @@
-c	base1.f
-C
-C       MULTISCALE FINITE ELEMENT BASIS in Square Mesh
-C       NODE = ONE OVER-SAMPLING 
-C       TO SOLVE THE MATRIX PROBLEM, USE dmgd9v
-C
+C       MULTISCALE FINITE ELEMENT METHOD           *
+C       OVERSAMPLING                               *
+C       BOUNDARY CONDITION: Dirichlet              *
+C       TO SOLVE THE MATRIX PROBLEM, USE dmgd9v    *
+C                                                  *
 C***************************************************
       program main
       parameter (max_nm=1402193, ! nm for level 9
@@ -12,119 +11,119 @@ C***************************************************
 
       real*8 ma(max_nm*9),mrhs(max_nm),a(max_nxf,max_nyf,9),
      +       vb(max_nm),ldu(3*max_nm),work(max_nxf*12),
-     +       wa(max_nm),wb(max_nm),p(max_nm),ppp(max_nm),
-     +       perm(-511:2560,-511:2560), 
-     +       erroru(2,max_nxf,max_nyf),rhs(max_nxf,max_nyf)
-
-      real*8 hx,hy,tol,resno,area,x,y,eu,eflux,value
-      real*8 stf1(4,4),stf2(4,4),stf3(4,4),stf4(4,4)
-      real*8 xmax,ymax,x0,y0,xblock,yblock
-      real*8 coor,basis,exact
-      integer ielement,k1,k2
+     +       wa(max_nm),wb(max_nm),p(max_nm),rhs(max_nxf,max_nyf),
+     +	     perm(-511:2560,-511:2560),
+     +        b(2,3,max_nm)
+      real*8 stiff(4,4,1024,1024) ! the size of global meshes
+                             ! nxglobal x nyglobal
+C	real*8 rhs1(3,3),rhs2(3,3)
+      real*8 rhs_elem(4,1024,1024),rhs1(4)
+      real*8 hx,hy,tol,resno,value,area,x,y,eu,eflux
+      real*8 stf1(4,4),stf2(4,4),stf3(4,4),stf4(4,4),stf(4,4)
+      real*8 value1,value2,value3,value4,eps
+      real*8 coor,basis,exact,flux,basis_x,basis_y
+      real*8 hxl,hyl,xl,yl,b1,b2,b3,local_basis_x,local_basis_y
       integer nx,ny,nxc,nyc,nxf,nyf,nm,levels,i,j,k,l,
      +        istart,iprep,maxit,ifail,index,kcoor,node,
-     +        iout(6),n1,n2,n3,iteration,num,it,nxyf,mx,
-     +        levelsglobal,ineps,mi,mj,mimax,mjmax,nx0,ny0,
-     +        nperm1,nperm2,nperm3,ntran
-      real*8 eps
-      common /epsilon/eps
-      common /domain/ xmax,ymax,x0,y0
-      common /param/ nx,ny,hx,hy
+     +        iout(6),n1,n2,n3,num,mil,mjl,nb,ntran,mmi,mmj
+	real*8 xleft,yleft,xright,yright
+	integer nxfine,nyfine
+	real*8 p_ex(5600594),p_ex_c(1050625),p_max,norml2,v1
+         character*13 filename
+
+        common /epsilon/eps
+
+      common /param/ nx,ny,hx,hy,xleft,yleft
+
       data nxc,nyc,istart,iprep,maxit,tol,ifail
-     +    /5,5,0,0,100,1.0d-8,110/
+     +    /5,5,0,0,50,1.0d-8,110/
       data iout/0,0,0,0,0,0/
 
 C.....PARAMETERS..............................
-      open(1,file='input.dat',status='old')
-      read(1,*) levels,nx,mx,levelsglobal,ineps,mimax,mjmax
-      read(1,*)
-      read(1,*) xleft,yleft,xright,yright
+
+      open(1, file='input.dat',status='old')
+      read(1,*) levelslocal,nxlocal,nxglobal,levelsglobal,ineps,
+     +          mimax,mjmax
+	read(1,*)
+	read(1,*) xleft,yleft,xright,yright
+c	read(1,*)
+	eps=1.d0/ineps
+
       close(1)
+        pi=dacos(-1.d0)
 
-      eps=1.d0/ineps
-      ny=nx
-      my=mx
-      xmax=(xright-xleft)/mx
-      ymax=(yright-yleft)/my
-      hx=xmax/nx
-      hy=ymax/ny
-      area=hx*hy      ! area of the element
-      print*,nx,ny,mx,my,xleft,yleft,xright,yright,xmax,ymax,hx,hy,eps
+      levels=levelsglobal     ! multigrid levels
+      nx=nxglobal        ! number of spaces in x direction
+      ny=nx        ! number of spaces in y direction
 
-      ! Over-sampling parameters
-      kx=nx
-      ky=ny
-      nx=4*nx
-      ny=4*ny
-      xblock=xmax
-      yblock=ymax
-      xmax=4.0d0*xmax
-      ymax=4.0d0*ymax
-      levels=levels+2
+      hx=(xright-xleft)/nx
+      hy=(yright-yleft)/ny
+      area=hx*hy   ! area of the element
+
+C.....LOCAL PARAMETERS.........................
+
+      nxl=nxlocal
+      nyl=nxl
+      hxl=hx/nxl
+      hyl=hy/nyl
 
 C.....MULTIGRID INFORMATION...................
 
       nxf=nxc
       nyf=nyc
       nm=nxf*nyf
-      do 10 k=2,levels
-        nxf=2*nxf-1
-        nyf=2*nyf-1
-        nm=nm+nxf*nyf
-   10 continue
+      do k=2,levels
+         nxf=2*nxf-1
+         nyf=2*nyf-1
+         nm=nm+nxf*nyf
+      end do
 
       print*, 'nxf=',nxf,'nyf=',nyf,'nm=',nm
-      print*, 'xmax=',xmax,'hx=',hx
+
+
 c*********************************************
-c	input the permeability data
+c       input the permeability data
 c*********************************************
-      if (mx*kx .eq. 2048) then
-            nxstart=-511
-            nystart=-511
-      else if (mx*kx .eq. 1024) then	
-            nxstart=-255
-            nystart=-255
-      else if (mx*kx .eq. 512 ) then
-            nxstart=-127
-            nystart=-127
-      else if (mx*kx .eq. 256 ) then
-            nxstart=-63
-            nystart=-63
-      else if (mx*kx .eq. 64) then
-            nxstart=-31
-            nystart=-31
-	  else 
-            print*, 'permeability data error'
-            stop
-      endif
+c       nxstart=-255
+c       nystart=-255
+c       open(1,file='../dat/perms.dat')
+c           read(1,*) nx1,ny1,ntot1
+c           do i=nxstart,nx1+nxstart-1
+c               read(1,*) (perm(i,j),j=nystart,ny1+nystart-1)
+c           enddo
+c       close(1)
 
-      open(1,file='../dat/perms.dat')
-	  read(1,*) nx1,ny1,ntot1
+c     do i=1,nx*nxl
+c        do j=1,ny*nyl
+c           perm(i,j)=(coef((i-1)*hxl,(j-1)*hyl)+coef((i-1)*hxl,j*hyl)
+c    +                +coef(i*hxl,(j-1)*hyl)+coef(i*hxl,j*hyl))/4.0d0
+c        end do
+c     end do
+   
 
-       !data check
-	
-      n1=2*(nxstart-1)
-	  if (mx*kx .ne. (nx1+n1)) then
-		print*, 'gird not consistent'
-		stop
-	    endif
-	    do i=nxstart,nx1+nxstart-1
-       	read(1,*) (perm(i,j),j=nystart,ny1+nystart-1)
-	    enddo
-	  close(1)
 
-       open(1,file='base/base1',status='unknown')
-C***********************************************************
-      do 3000 mj=1,mjmax
-      do 3000 mi=1,mimax
-C***********************************************************
-      
-      x0=xleft+(mi-1)*xblock-1.5d0*xblock ! (x0,y0) is the left-bottom
-      y0=yleft+(mj-1)*yblock-1.5d0*yblock       ! corner of the sample
-c      nx0=(mi-1)*kx-2*kx+1          
-c      ny0=(mj-1)*ky-2*ky+1             
-c      print*, 'mi,mj,nx0,ny0,x0,y0=',mi,mj,nx0,ny0,x0,y0
+C.....READ THE ELEMENT STIFFNESS MATRIX.........
 
+      open(1,file='base/stf',status='old')
+      open(2,file='base/rhs',status='old')
+      do 100 mmj=1,mjmax
+      do 100 mmi=1,mimax
+         read(1,*) ((stf(i,j),j=1,4),i=1,4)   
+         read(2,*) (rhs1(i),i=1,4) 
+         do mj=mmj,ny,mjmax
+         do mi=mmi,nx,mimax
+            do k=1,4
+            do l=1,4
+               stiff(k,l,mi,mj)=stf(k,l)
+            end do
+               rhs_elem(k,mi,mj)=rhs1(k)
+            end do
+         end do
+         end do
+100	continue
+
+      close(1)
+      close(2)
 C.....FORM THE MA MATRIX.....................
 
       do j=1,nyf
@@ -150,10 +149,10 @@ C.....FORM THE MA MATRIX.....................
       ! Interior nodes
       do j=2,ny
          do i=2,nx
-            call get_stiff(stf1,i-1,j-1)
-            call get_stiff(stf2,i,j-1)
-            call get_stiff(stf3,i-1,j)
-            call get_stiff(stf4,i,j)
+            call get_stiff(stf1,i-1,j-1,stiff)
+            call get_stiff(stf2,i,j-1,stiff)
+            call get_stiff(stf3,i-1,j,stiff)
+            call get_stiff(stf4,i,j,stiff)
             if(i.eq.2.or.j.eq.2) then
                a(i,j,1)=0.0d0
             else
@@ -217,55 +216,64 @@ C.....ASSEMBLE THE RHS...................................
 
       ! boundary nodes: left and right
       do j=1,ny+1
-         rhs(1,j)=exact(x0,y0+(j-1)*hy)
-         rhs(nx+1,j)=exact(x0+nx*hx,y0+(j-1)*hy)
+         rhs(1,j)=exact(xleft,yleft+(j-1)*hy)
+         rhs(nx+1,j)=exact(xleft+nx*hx,yleft+(j-1)*hy)
       end do
 
       ! Boundary nodes: top and bottom
       do i=1,nx+1
-         rhs(i,1)=exact(x0+(i-1)*hx,y0)
-         rhs(i,ny+1)=exact(x0+(i-1)*hx,y0+ny*hy)
-      end do
+         rhs(i,1)=exact(xleft+(i-1)*hx,yleft)
+         rhs(i,ny+1)=exact(xleft+(i-1)*hx,yleft+ny*hy)
+      end do 
 
       ! Interior nodes
       do j=2,ny
          do i=2,nx
+c            call get_force(value1,3,i-1,j-1,rhs_elem)
+c            call get_force(value2,4,i,j-1,rhs_elem)
+c            call get_force(value3,2,i-1,j,rhs_elem)
+c            call get_force(value4,1,i,j,rhs_elem)
+            value1=rhs_elem(3,i-1,j-1)
+            value2=rhs_elem(4,i,j-1)
+            value3=rhs_elem(2,i-1,j)
+            value4=rhs_elem(1,i,j)
+            rhs(i,j)=value1+value2+value3+value4
             if(i.eq.2.and.j.ne.2.and.j.ne.ny) then
-               call get_stiff(stf1,i-1,j-1)
-               call get_stiff(stf3,i-1,j)
+               call get_stiff(stf1,i-1,j-1,stiff)
+               call get_stiff(stf3,i-1,j,stiff)
                rhs(i,j)=rhs(i,j)
      +            -stf1(1,3)*rhs(i-1,j-1)
      +            -(stf1(4,3)+stf3(1,2))*rhs(i-1,j)
      +            -stf3(4,2)*rhs(i-1,j+1)
             end if
             if(i.eq.nx.and.j.ne.2.and.j.ne.ny) then
-               call get_stiff(stf2,i,j-1)
-               call get_stiff(stf4,i,j)
+               call get_stiff(stf2,i,j-1,stiff)
+               call get_stiff(stf4,i,j,stiff)
                rhs(i,j)=rhs(i,j)
      +                 -stf2(2,4)*rhs(i+1,j-1)
      +                 -(stf2(3,4)+stf4(2,1))*rhs(i+1,j)
      +                 -stf4(3,1)*rhs(i+1,j+1)
             end if
             if(j.eq.2.and.i.ne.2.and.i.ne.nx) then
-               call get_stiff(stf1,i-1,j-1)
-               call get_stiff(stf2,i,j-1)
+               call get_stiff(stf1,i-1,j-1,stiff)
+               call get_stiff(stf2,i,j-1,stiff)
                rhs(i,j)=rhs(i,j)
      +            -stf1(1,3)*rhs(i-1,j-1)
      +            -(stf1(2,3)+stf2(1,4))*rhs(i,j-1)
      +            -stf2(2,4)*rhs(i+1,j-1)
             end if
             if(j.eq.ny.and.i.ne.2.and.i.ne.nx) then
-               call get_stiff(stf3,i-1,j)
-               call get_stiff(stf4,i,j)
+               call get_stiff(stf3,i-1,j,stiff)
+               call get_stiff(stf4,i,j,stiff)
                rhs(i,j)=rhs(i,j)
      +            -stf3(4,2)*rhs(i-1,j+1)
      +            -(stf3(3,2)+stf4(4,1))*rhs(i,j+1)
      +            -stf4(3,1)*rhs(i+1,j+1)
             end if
             if(i.eq.2.and.j.eq.2) then
-               call get_stiff(stf1,i-1,j-1)
-               call get_stiff(stf2,i,j-1)
-               call get_stiff(stf3,i-1,j)
+               call get_stiff(stf1,i-1,j-1,stiff)
+               call get_stiff(stf2,i,j-1,stiff)
+               call get_stiff(stf3,i-1,j,stiff)
                rhs(i,j)=rhs(i,j)
      +            -stf1(1,3)*rhs(i-1,j-1)
      +            -(stf1(2,3)+stf2(1,4))*rhs(i,j-1)
@@ -274,9 +282,9 @@ C.....ASSEMBLE THE RHS...................................
      +            -stf3(4,2)*rhs(i-1,j+1)
             end if
             if(i.eq.2.and.j.eq.ny) then
-               call get_stiff(stf1,i-1,j-1)
-               call get_stiff(stf3,i-1,j)
-               call get_stiff(stf4,i,j)
+               call get_stiff(stf1,i-1,j-1,stiff)
+               call get_stiff(stf3,i-1,j,stiff)
+               call get_stiff(stf4,i,j,stiff)
                rhs(i,j)=rhs(i,j)
      +            -stf1(1,3)*rhs(i-1,j-1)
      +            -(stf1(4,3)+stf3(1,2))*rhs(i-1,j)
@@ -285,9 +293,9 @@ C.....ASSEMBLE THE RHS...................................
      +            -stf4(3,1)*rhs(i+1,j+1)
             end if              
             if(i.eq.nx.and.j.eq.2) then
-               call get_stiff(stf1,i-1,j-1)
-               call get_stiff(stf2,i,j-1)
-               call get_stiff(stf4,i,j)
+               call get_stiff(stf1,i-1,j-1,stiff)
+               call get_stiff(stf2,i,j-1,stiff)
+               call get_stiff(stf4,i,j,stiff)
                rhs(i,j)=rhs(i,j)
      +            -stf1(1,3)*rhs(i-1,j-1)
      +            -(stf1(2,3)+stf2(1,4))*rhs(i,j-1)
@@ -296,9 +304,9 @@ C.....ASSEMBLE THE RHS...................................
      +            -stf4(3,1)*rhs(i+1,j+1)
             end if
             if(i.eq.nx.and.j.eq.ny) then
-               call get_stiff(stf2,i,j-1)
-               call get_stiff(stf3,i-1,j)
-               call get_stiff(stf4,i,j)
+               call get_stiff(stf2,i,j-1,stiff)
+               call get_stiff(stf3,i-1,j,stiff)
+               call get_stiff(stf4,i,j,stiff)
                rhs(i,j)=rhs(i,j)
      +            -stf2(2,4)*rhs(i+1,j-1)
      +            -(stf2(3,4)+stf4(2,1))*rhs(i+1,j)
@@ -317,30 +325,107 @@ C.....ASSEMBLE THE RHS...................................
          end do
       end do
 
-c      print*, 'go to mgd9v'
+      print*, 'go to mgd9v'
       call mgd9v(levels,nxc,nyc,nxf,nyf,nm,iout,istart,iprep,
      +     maxit,tol,mrhs,ma,p,vb,work,ldu,wa,wb,resno,ifail)
-c      print*,' ifail: ',ifail,' resno: ',resno
-c      print*, 'out of mgd9v'
+      print*,' ifail: ',ifail,' resno: ',resno
+      print*, 'out of mgd9v'
 
-      k=0
-      k1=kx*3/2
-      k2=ky*3/2
-      do j=k2+1,k2+ky+1
-         do i=k1+1,k1+kx+1
-            k=k+1
-            ppp(k)=p((j-1)*(nx+1)+i)
-         end do
-      end do
+c     print*, 'p=',(p(i),i=1,nxf*2)
+c	output the result
+	open(2,file='result/Omsfem_solution.dat')
+	write(2,*) nxf,nyf,(p(i),i=1,nxf*nyf)
+	close(2)
 
-      nxyf=(kx+1)*(ky+1)
-c      print*,k,nxyf
-      write(1,*) nxyf, (ppp(i),i=1,nxyf)
+c	compare with the exact solution
 
- 3000 continue
-      close(1)
+ 	open(1,file='../dat/result/exact_2048.dat',
+     +          form='formatted')
+  	read(1,*) nxfine,nyfine,(p_ex(i),i=1,nxfine*nyfine)
+ 	close(1)
 
+c.	average on the fine grid to yiled coarse grid 'exact' solution
+
+c       numx=(nxfine-1)/nx 
+c       numy=(nyfine-1)/ny 
+c       do j=1,ny 
+c       do i=1,nx 
+c          v1=0.d0
+c          k0=(j-1)*numy*nxfine+(i-1)*numx+1
+c          do jj=1,numy+1
+c          do ii=1,numx+1
+c               kk=k0+(jj-1)*nxfine+ii-1
+c               v1=v1+p_ex(kk)
+c          enddo
+c          enddo
+c          v1=v1/(numx+1)/(numy+1)
+c          k=(j-1)*nx+i
+c          p_ex_c(k)=v1
+c       enddo
+c       enddo
+
+	eu=0.d0
+	value=0.d0
+        norml2=0.d0
+        p_max=0.0d0
+	nxfine=nxfine-1
+	nyfine=nyfine-1
+ 	do j=2,ny
+ 	   do i=2,nx
+ 		n1=(j-1)*(nx+1)+i
+ 		n2=(j-1)*(nyfine/ny)*(nxfine+1)+(i-1)*(nxfine/nx)+1
+ 		eu=eu+(p(n1)-p_ex(n2))**2
+ 		if(value.lt.dabs(p(n1)-p_ex(n2))) value=dabs(p(n1)-p_ex(n2))
+                norml2=norml2+p_ex(n2)**2
+                if(p_max.lt.dabs(p_ex(n2))) p_max=dabs(p_ex(n2))
+c		eu=eu+(p(n1)-p_ex_c(n1))**2
+c		if(value.lt.abs(p(n1)-p_ex_c(n1))) value=abs(p(n1)-p_ex_c(n1))
+c               norml2=norml2+p_ex_c(n1)**2
+c               if(p_max.lt.abs(p_ex(n1))) p_max=abs(p_ex_c(n1))
+ 	   enddo
+ 	enddo
+        norml2=dsqrt(norml2*hx*hy)  
+ 	eu=dsqrt(eu*hx*hy)
+cccccccccccccccccccccccccc
+c  This creates a file called error????.dat, where ???? is the partition
+c  number on x-direction.
+cccccccccccccccccccccccccc
+        iter=nx
+            ii1 = iter / 1000
+            m1 = mod(ii1,10)
+            ii2 = iter / 100
+            m2 = mod(ii2,10)
+            ii3 = iter / 10
+            m3 = mod(ii3,10)
+            m4 = mod(iter,10)
+
+            filename = 'error'//char(m1+48)//char(48+m2)//char(48+m3)//
+     $           char(48+m4)//'.dat'
+
+ 
+        open(12,file=filename)
+ 	write(12,*) " nx,  relative L^2-error,  relative  L^\\infty-error"
+ 	write(12,*) nx,eu/norml2,value/p_max
+ 	close(12)
+ 	print*, 'L^2 error is  ', eu,eu/norml2
+ 	print*, "L^\\infty  error is  ",  value,value/p_max
+        print*, 'l2-norm and L_inf norm of exact solution: ', norml2,
+     &  p_max
+       stop
       end
+
+C     ------------------------------------------------
+C     FUNCTION NTRAN
+C     ------------------------------------------------
+      integer function ntran(i)
+      integer i
+      real*8  a
+
+      ntran=i
+
+      return
+      end
+
 C     -------------------------------------------------
 C     SUBROUTINE ASSIGN_MA
 C     -------------------------------------------------
@@ -368,73 +453,51 @@ C     -------------------------------------------------
 C****************************************************
 C       ELEMENT INFORMATION
 C****************************************************
-C     -----------------------------------------------
+C----------------------------------------------------
 C     SUBROUTINE GET_STIFF
-C     -----------------------------------------------
-      subroutine get_stiff(stf,i,j)
-      common /domain/ xmax,ymax,x0,y0
-      common /param/ nx,ny,hx,hy
+C----------------------------------------------------
+      subroutine get_stiff(stf,i,j,stiff)
+      real*8 stf(4,4),stiff(4,4,1024,1024)
+      integer i,j,k,l,nx,ny
 
-      real*8 hx,hy,stf(4,4),area,x,y,bk1,bk2,bl1,bl2,xmax,ymax
-      real*8 basis_x,basis_y,coor_gauss,d,x0,y0
-      integer nx,ny,i,j,node,k,l
-
-      area=hx*hy
-
-      do k=1,4
-         do l=1,4
-            stf(k,l)=0.0d0
-            do node=1,4
-               x=coor_gauss(node,1,i,j)
-               y=coor_gauss(node,2,i,j)
-               !x=coor(node,1,i,j)
-               !y=coor(node,2,i,j)
-               bk1=basis_x(k,x,y,i,j)
-               bk2=basis_y(k,x,y,i,j)
-               bl1=basis_x(l,x,y,i,j)
-               bl2=basis_y(l,x,y,i,j)
-               stf(k,l)=stf(k,l)+(area/4.0d0)*
-     +              (d(1,1,x,y)*bk1*bl1+d(1,2,x,y)*bk1*bl2
-     +              +d(2,1,x,y)*bk2*bl1+d(2,2,x,y)*bk2*bl2)
-            end do
-         end do
-      end do
-
+      do 20 k=1,4
+         do 10 l=1,4
+         stf(k,l)=stiff(k,l,i,j)
+ 10      continue
+ 20   continue
+ 
       return
       end
 
 C     -------------------------------------------------
-C     SUBROUTINE GET_NUM
+C     SUBROUTINE GET_FORCE
 C     --------------------------------------------------
-      subroutine get_num(num,node,i,j)
-      common /param/ nx,ny,hx,hy
-      real*8 hx,hy
-      integer num,node,i,j,nx,ny
+      ! The integral of the force*basis(node) 
+      ! over the element (i,j)
+      subroutine get_force(value,node,i,j,rhs_elem)
+      common /param/nx,ny,hx,hy,xleft,yleft
+      real*8 hx,hy,value,x,y,area,xleft,yleft
+      real*8 force,coor_gauss,basis,rhs_elem(4,1024,1024)
+      integer nx,ny,index,i,j,node
 
+      area=hx*hy
 
-      if     (node.eq.1) then
-        num=(j-1)*(nx+1)+i
-      elseif (node.eq.2) then
-        num=(j-1)*(nx+1)+i+1
-      elseif (node.eq.3) then
-        num=j*(nx+1)+i+1
-      elseif (node.eq.4) then
-        num=j*(nx+1)+i
-      else
-        print*, 'problem here in get_num!'
-      endif
+      value=0.0d0
+      do k=1,4
+         x=coor_gauss(k,1,i,j)
+         y=coor_gauss(k,2,i,j)
+         value=value+force(x,y)*basis(node,x,y,i,j)/4.0d0
+      end do
+      value=value*area
 
       return
       end
-
 C     --------------------------------------------
 C     FUNCTION COOR
 C     --------------------------------------------
       real*8 function coor(node,kcoor,i,j)
-      common /domain/ xmax,ymax,xleft,yleft
-      common /param/ nx,ny,hx,hy
-
-      real*8 hx,hy,x0,y0,xleft,yleft,xmax,ymax
+      common /param/ nx,ny,hx,hy,xleft,yleft
+      real*8 hx,hy,x0,y0,xleft,yleft
       integer nx,ny,index,node,kcoor,i,j
 
       x0=xleft+(i-1)*hx
@@ -467,11 +530,9 @@ C     --------------------------------------------
 C     FUNCTION COOR
 C     --------------------------------------------
       real*8 function coor_gauss(node,kcoor,i,j)
-      common /domain/ xmax,ymax,xleft,yleft
-      common /param/ nx,ny,hx,hy
-
-      real*8 hx,hy,x0,y0,tmp,xleft,yleft,xmax,ymax
-      integer nx,ny,node,kcoor,i,j
+      common /param/ nx,ny,hx,hy,xleft,yleft
+      real*8 hx,hy,x0,y0,tmp,xleft,yleft
+      integer nx,ny,index,node,kcoor,i,j
 
       x0=xleft+(i-1)*hx
       y0=yleft+(j-1)*hy
@@ -504,9 +565,8 @@ C     ----------------------------------------------
 C     FUNCTION BASIS
 C     ----------------------------------------------
       real*8 function basis(node,x,y,i,j)
-      common /domain/ xmax,ymax,xleft,yleft
-      common /param/ nx,ny,hx,hy
-      real*8 hx,hy,x,y,x0,y0,area,xleft,yleft,xmax,ymax
+      common /param/ nx,ny,hx,hy,xleft,yleft
+      real*8 hx,hy,x,y,x0,y0,area,xleft,yleft
       integer nx,ny,node,kcoor,i,j
 
       x0=xleft+(i-1)*hx
@@ -528,97 +588,24 @@ C     ----------------------------------------------
       return
       end
 
-C     ----------------------------------------------
-C     FUNCTION BASIS_X
-C     ----------------------------------------------
-      real*8 function basis_x(node,x,y,i,j)
-      common /domain/ xmax,ymax,xleft,yleft
-      common /param/ nx,ny,hx,hy
-      real*8 hx,hy,x,y,x0,y0,area,xleft,yleft,xmax,ymax
-      integer nx,ny,node,kcoor,i,j
-
-      x0=xleft+(i-1)*hx
-      y0=yleft+(j-1)*hy
-      area=hx*hy
-
-      if     (node.eq.1.) then
-        basis_x=(y-y0-hy)/area
-      elseif (node.eq.2) then
-        basis_x=-(y-y0-hy)/area
-      elseif (node.eq.3) then
-        basis_x=(y-y0)/area
-      elseif (node.eq.4) then
-        basis_x=-(y-y0)/area
-      else
-        print*, 'problem here in function basis_x!'
-      endif
-
-
-      return
-      end
-
-C     ----------------------------------------------
-C     FUNCTION BASIS_Y
-C     ----------------------------------------------
-      real*8 function basis_y(node,x,y,i,j)
-      common /domain/ xmax,ymax,xleft,yleft
-      common /param/ nx,ny,hx,hy
-      real*8 hx,hy,x,y,x0,y0,area,xleft,yleft,xmax,ymax
-      integer nx,ny,node,kcoor,i,j
-
-      x0=xleft+(i-1)*hx
-      y0=yleft+(j-1)*hy
-      area=hx*hy
-
-      if     (node.eq.1.) then
-        basis_y=(x-x0-hx)/area
-      elseif (node.eq.2) then
-        basis_y=-(x-x0)/area
-      elseif (node.eq.3) then
-        basis_y=(x-x0)/area
-      elseif (node.eq.4) then
-        basis_y=-(x-x0-hx)/area
-      else
-        print*, 'problem here in function basis!'
-      endif
-
-      return
-      end
 
 C*****************************************************
 C        INPUT DATA
 C*****************************************************
+
+C     -------------------------------------------
+C     SOURCE FUNCTION
+C     -------------------------------------------
+      real*8 function force(x,y)
+      real*8 x,y     
+      force=-1.0d0
+      end
+
 C     -------------------------------------------
 C     EXACT SOLUTION
 C     -------------------------------------------
       real*8 function exact(x,y)
-      common /domain/ xmax,ymax,x0,y0
-      real*8 x,y,xmax,ymax,x0,y0,area
-      area=xmax*ymax
-      exact=(x-x0-xmax)*(y-y0-ymax)/area
-      end
-C     -------------------------------------------
-C     COEFFICIENT MATRIX
-C     -------------------------------------------
-      real*8 function d(i,j,x,y)
-      real*8 x,y,coef,perm(-511:2560,-511:2560)
-      real*8 tmpx,tmpy
-      integer i,j,k,l
-      common /param/ nx,ny,hx,hy
-      
-      
-      if     (i.eq.1.and.j.eq.1) then
-        d=coef(x,y)
-      elseif (i.eq.1.and.j.eq.2) then
-        d=0.0d0
-      elseif (i.eq.2.and.j.eq.1) then
-        d=0.0d0
-      elseif (i.eq.2.and.j.eq.2) then
-        d=coef(x,y)
-      else
-        print*, 'problem here in function d!'
-      endif
-      
-      
-      return
+      real*8 x,y
+      exact=0.0d0
+c     exact=1.0d0-x
       end
