@@ -1260,7 +1260,7 @@ C     -----------------------------------------------
             stf(node,node1)=stf(node,node1)+value2
  2000     continue
 
-        stf=0.0d0
+        !stf=0.0d0
         
       return
       end
