@@ -90,7 +90,8 @@ C---------------------------------------------------
       hx=xmax/nx  !细网格尺寸
       hy=ymax/ny
       eps=1.d0/ineps
-      rho=eps
+      !rho=eps
+      rho=hx
       print*,'first',eps
       delta0=sigma1/xmax  !粗网格加罚系数
       delta1=sigma2/hx    !细网格加罚系数

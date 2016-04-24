@@ -773,7 +773,7 @@ C***************************************************
         end subroutine
       end interface
       
-      delta3=0.1d0*eps
+      delta3=0.1d0*hx
       
       do 20 mj=1,my
       do 10 mi=1,mxmax(mj)
