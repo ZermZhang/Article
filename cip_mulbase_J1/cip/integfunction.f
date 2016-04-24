@@ -1119,7 +1119,7 @@ c0   +    +p(index1,m,mi1,mj1,n1)*p2(l,node4)*perm2*value
  
  80         continue
  
-        stf=0.0d0
+        !stf=0.0d0
         
       return
       end      
