@@ -1,19 +1,19 @@
-function result = trans()
 %改变matlab中的局部基函数的存储形式以便适应fortran程序的需求
 
+function result = trans()
 %% modify the data
 %=======================================
 
 % read the data from the old files and full it.
 load basis_data_MsFEM.mat  loc_basis
-loc_basis = full(loc_basis);
+%loc_basis = full(loc_basis);
 [m,n] = size(loc_basis);
-fprintf('%d,%d\n',m,n);
+fprintf('m=%d,n=%d\n',m,n);
 Nx = sqrt(n) - 1;
 Ny = Nx;
 nx = (sqrt(m) - 1)/Nx;
 ny=nx;
-fprintf('%d,%d\n',Nx,nx)
+fprintf('Nx=%d,nx=%d\n',Nx,nx)
 
 %=======================================
 %% build the target files and init the variables
@@ -53,10 +53,10 @@ for i = 1:Nx
            fprintf(fp4,'%d ',(Nx+1)*(Ny+1));
            for m = 1:nx+1
                for l = 1:ny+1
-                   fprintf(fp1,'%f ',tmp_basis1(((l-1)*(ny+1)+m),1));
-                   fprintf(fp2,'%f ',tmp_basis2(((l-1)*(ny+1)+m),1));
-                   fprintf(fp3,'%f ',tmp_basis3(((l-1)*(ny+1)+m),1));
-                   fprintf(fp4,'%f ',tmp_basis4(((l-1)*(ny+1)+m),1));
+                   fprintf(fp1,'%f ',full(tmp_basis1(((l-1)*(ny+1)+m),1)));
+                   fprintf(fp2,'%f ',full(tmp_basis2(((l-1)*(ny+1)+m),1)));
+                   fprintf(fp3,'%f ',full(tmp_basis3(((l-1)*(ny+1)+m),1)));
+                   fprintf(fp4,'%f ',full(tmp_basis4(((l-1)*(ny+1)+m),1)));
                end
            end
            fprintf(fp1,'\n');

@@ -19,8 +19,8 @@ solve_fine = 1;
 compute_error = 1;
 
 % Input the num of Corase block , num of fine block in one Corase block 
-Nx=2; Ny=Nx;       %num of corase block 
-nx=2; ny=nx;       %num of fine block in one corase block
+Nx=32; Ny=Nx;       %num of corase block 
+nx=32; ny=nx;       %num of fine block in one corase block
 
 
 %=========================================================
