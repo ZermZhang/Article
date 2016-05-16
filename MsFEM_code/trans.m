@@ -1,12 +1,13 @@
 %改变matlab中的局部基函数的存储形式以便适应fortran程序的需求
 
 function result = trans()
-%% modify the data
+%=======================================
+%% initialize
 %=======================================
 
 % read the data from the old files and full it.
 load basis_data_MsFEM.mat  loc_basis
-%loc_basis = full(loc_basis);
+%loc_basis = full(loc_basis);      it's too big to full.
 [m,n] = size(loc_basis);
 fprintf('m=%d,n=%d\n',m,n);
 Nx = sqrt(n) - 1;
